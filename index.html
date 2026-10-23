@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pritam's Gate Controller</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88zM19 3h-2v2h2V3zm0 16h-2v2h2v-2zM5 3H3v2h2V3zm0 16H3v2h2v-2z'/></svg>">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88zM19 3h-2v2h2V3zm0 16h-2v2h2v-2zM5 3H3v2h2V3zm0 16H3v2h2v-2z'/></svg>">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -129,6 +130,13 @@ body {
 </footer>
 
 <script>
+// Register Service Worker for PWA installation support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW reg failed:', err));
+  });
+}
+
 const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
@@ -257,7 +265,6 @@ async function connectBLE(isReconnect = false) {
       logMessage(`Auto-reconnecting (Attempt ${reconnectAttempts}/3)...`);
     }
 
-    // 10-second connection timeout protection wrapper
     const connectPromise = bluetoothDevice.gatt.connect();
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error("Connection timed out (10s)")), 10000)
@@ -282,13 +289,12 @@ async function connectBLE(isReconnect = false) {
   } catch (error) {
     logMessage(`Connection failed: ${error.message}`, "error");
     
-    // Auto-reconnect trigger if dropped unexpectedly and under 3 attempts
     if (!manualDisconnect && reconnectAttempts < 3 && bluetoothDevice) {
       reconnectAttempts++;
       setTimeout(() => {
         isConnecting = false;
         connectBLE(true);
-      }, 3000); // Wait 3 seconds before trying again
+      }, 3000);
       return;
     }
     disconnectBLE();
@@ -396,4 +402,3 @@ function updateConnectionState(connected, name) {
 </script>
 </body>
 </html>
-
