@@ -130,7 +130,7 @@ body {
 </footer>
 
 <script>
-// Register Service Worker for PWA installation support
+// Register Service Worker for PWA installation support[span_2](start_span)[span_2](end_span)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(err => console.log('SW reg failed:', err));
@@ -346,7 +346,7 @@ function handleNotifications(event) {
 }
 
 function onDisconnected() {
-  logMessage("Device disconnected unexpectedly.", "error");
+  logMessage("Device disconnected unexpectedly (Out of range or link lost).", "error");
   if (!manualDisconnect && bluetoothDevice && reconnectAttempts < 3) {
     reconnectAttempts++;
     logMessage(`Attempting auto-reconnect (${reconnectAttempts}/3)...`);
