@@ -32,7 +32,7 @@ bool triggerLampPulse = false;
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 BLECharacteristic *pTxCharacteristic;
-bool deviceConnected = false;
+int connectedClientsCount = 0;
 BLEServer *pServerInstance = nullptr;
 
 // Hardware-verified EV1527 frame timing
@@ -68,28 +68,31 @@ void sendClockPulse(uint32_t code, unsigned long durationMs) {
 }
 
 void sendBleMessage(const char* msg) {
-  if (deviceConnected) {
+  if (connectedClientsCount > 0 && pTxCharacteristic != nullptr) {
     pTxCharacteristic->setValue((uint8_t*)msg, strlen(msg));
     pTxCharacteristic->notify();
   }
   Serial.print(msg);
 }
 
-// Connection Callbacks
+// Connection Callbacks for Multi-Device Support & Continuous Advertising
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) override {
-    deviceConnected = true;
-    Serial.println("[BLE] Phone connected. Enforcing high-speed connection parameters & Passkey...");
+    connectedClientsCount++;
+    Serial.printf("[BLE] Client connected. Total active: %d. Enforcing security...\n", connectedClientsCount);
     
     pServer->updateConnParams(param->connect.remote_bda, 0x06, 0x12, 0, 500);
     esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT_MITM);
+
+    // Keep broadcasting advertising so other phones can still discover "Siddheshwar Niwas"
+    pServer->getAdvertising()->start();
   }
 
   void onDisconnect(BLEServer* pServer) override {
-    deviceConnected = false;
+    connectedClientsCount = max(0, connectedClientsCount - 1);
     activeCode = 0;
     digitalWrite(TX_PIN, LOW);
-    Serial.println("[BLE] Phone disconnected. Restarting high-power advertising...");
+    Serial.printf("[BLE] Client disconnected. Total active: %d. Ensuring advertising is active...\n", connectedClientsCount);
     
     delay(100);
     pServer->getAdvertising()->start();
@@ -99,7 +102,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
 // Command Receiver Callbacks
 class MyRxCallbacks: public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) override {
-    String rxValue = pCharacteristic->getValue();
+    String rxValue = pCharacteristic->getValue(); // Fixed for ESP32 Core v3.x String type
     if (rxValue.length() > 0) {
       for (int i = 0; i < rxValue.length(); i++) {
         char cmd = rxValue[i];
@@ -162,13 +165,13 @@ void setup() {
   pinMode(TX_PIN, OUTPUT);
   digitalWrite(TX_PIN, LOW);
 
-  // 1. Initialize Watchdog Timer (Updated for ESP32 Arduino Core v3.x)
+  // 1. Initialize Watchdog Timer
   Serial.println("[WDT] Initializing Watchdog Timer...");
-  esp_task_wdt_deinit(); // Clean up default state if any
+  esp_task_wdt_deinit();
   esp_task_wdt_config_t twdt_config = {
     .timeout_ms = WDT_TIMEOUT_SEC * 1000,
-    .idle_core_mask = (1 << 0), // Watch Core 0
-    .trigger_panic = true       // Reboot ESP32 on hang
+    .idle_core_mask = (1 << 0),
+    .trigger_panic = true
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL); 
@@ -219,24 +222,23 @@ void setup() {
 
   pService->start();
 
-  // 5. Configure High-Performance Advertising for Maximum Distance
+  // 5. Configure High-Performance Advertising for Maximum Distance & Continuous Visibility
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinInterval(0x20); 
-  pAdvertising->setMaxInterval(0x40);
+  pAdvertising->setMinInterval(0x20); // Fast interval (~20ms)
+  pAdvertising->setMaxInterval(0x40); // Fast interval (~40ms)
   
   BLEDevice::startAdvertising();
 
   Serial.println("=========================================");
   Serial.println("Siddheshwar Niwas BLE Controller Online");
   Serial.printf("Transmitter Pin: GPIO %d\n", TX_PIN);
-  Serial.println("Pure BLE Mode: +9dBm, Passkey 997525, WDT Active");
+  Serial.println("Continuous Adv Mode: +9dBm, Passkey 997525, Multi-Client Ready");
   Serial.println("=========================================");
 }
 
 void loop() {
-  // Feed the watchdog timer on every loop iteration
   esp_task_wdt_reset();
 
   if (triggerLampPulse) {
