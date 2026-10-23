@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pritam's Gate Controller</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88zM19 3h-2v2h2V3zm0 16h-2v2h2v-2zM5 3H3v2h2V3zm0 16H3v2h2v-2z'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><path d='M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88zM19 3h-2v2h2V3zm0 16h-2v2h2v-2zM5 3H3v2h2V3zm0 16H3v2h2v-2z'/></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'media',
+  theme: {
+    extend: {
+      colors: {
+        industrial: {
+          950: '#0a0b0e',
+          900: '#12141c',
+          800: '#1a1d26',
+          700: '#252936',
+          600: '#34394a',
+          accent: '#06b6d4',
+          accentHover: '#0891b2',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace']
+      }
+    }
+  }
+}
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+.terminal-scroll::-webkit-scrollbar { width: 5px; }
+.terminal-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
+.terminal-scroll::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 3px; }
+.tactile-btn:active { transform: scale(0.97); }
+.cutout-ring {
+  position: absolute;
+  inset: -1px;
+  border-radius: 28px;
+  padding: 3px;
+  background: conic-gradient(transparent 0deg, transparent 0deg);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+.cutout-ring.active { opacity: 1; }
+</style>
+</head>
+<body class="bg-gray-100 dark:bg-industrial-950 text-gray-900 dark:text-gray-100 p-3 sm:p-4 max-w-md mx-auto flex flex-col space-y-3 transition-colors duration-200">
+
+<header class="space-y-2.5">
+  <div class="flex items-center justify-between border-b border-gray-300 dark:border-industrial-700 pb-2.5">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+        <svg class="w-5 h-5 text-industrial-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        Pritam's Gate Controller
+      </h1>
+      <p class="text-[11px] text-gray-500 dark:text-gray-400">Siddheshwar Niwas • Secure BLE</p>
+    </div>
+    <div id="connectionStatusBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-200 dark:bg-industrial-800 border border-gray-300 dark:border-industrial-700 text-xs font-medium text-gray-700 dark:text-gray-300">
+      <span id="statusDot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </div>
+
+  <button id="connectBtn" onclick="toggleConnection()" class="w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+    <span id="connectBtnText">Connect to Gate</span>
+  </button>
+</header>
+
+<main class="grid grid-cols-2 gap-3">
+  <button onclick="sendCommand('1')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+    <div id="ring-1" class="cutout-ring"></div>
+    <div class="w-11 h-11 rounded-[16px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-xl">🔓</div>
+    <span class="text-sm font-bold tracking-wider">OPEN</span>
+    <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 1</span>
+  </button>
+
+  <button onclick="sendCommand('2')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-rose-500/50 dark:hover:border-rose-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+    <div id="ring-2" class="cutout-ring"></div>
+    <div class="w-11 h-11 rounded-[16px] bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-xl">🔒</div>
+    <span class="text-sm font-bold tracking-wider">CLOSE</span>
+    <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 2</span>
+  </button>
+
+  <button onclick="sendCommand('3')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-red-500/50 dark:hover:border-red-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+    <div id="ring-3" class="cutout-ring"></div>
+    <div class="w-11 h-11 rounded-[16px] bg-red-500/15 text-red-600 dark:text-red-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    </div>
+    <span class="text-sm font-bold tracking-wider">STOP</span>
+    <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 3</span>
+  </button>
+
+  <button onclick="sendCommand('4')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-amber-500/50 dark:hover:border-amber-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+    <div id="ring-4" class="cutout-ring"></div>
+    <div class="w-11 h-11 rounded-[16px] bg-amber-500/10 text-amber-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+    </div>
+    <span class="text-sm font-bold tracking-wider">LAMPS</span>
+    <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 4</span>
+  </button>
+</main>
+
+<footer class="bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 rounded-[26px] p-3 flex flex-col h-32 shadow-md">
+  <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-gray-200 dark:border-industrial-800 text-[11px] text-gray-500 dark:text-gray-400">
+    <span class="flex items-center gap-1.5 font-mono">
+      <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
+      CONSOLE FEEDBACK
+    </span>
+    <button onclick="clearConsole()" class="hover:text-gray-800 dark:hover:text-white transition-colors">Clear</button>
+  </div>
+  <div id="consoleLog" class="terminal-scroll flex-1 overflow-y-auto font-mono text-[11px] text-gray-700 dark:text-gray-300 space-y-0.5 pr-1">
+    <div class="text-gray-400 dark:text-gray-500">[System] Ready. Tap 'Connect to Gate' (Passkey: 997525)</div>
+  </div>
+</footer>
+
+<script>
+const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const UART_RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+const UART_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+let bluetoothDevice = null;
+let bluetoothServer = null;
+let rxCharacteristic = null;
+let txCharacteristic = null;
+let isConnected = false;
+let isConnecting = false;
+let manualDisconnect = false;
+let reconnectAttempts = 0;
+let writeChain = Promise.resolve();
+
+const ringAnimations = {};
+const ringTimeouts = {};
+const RING_COLORS = { '1': '#10b981', '2': '#e11d48', '3': '#ff2a2a', '4': '#f59e0b' };
+const RING_DURATIONS = { '1': 30000, '2': 30000, '3': 1000, '4': 5000 };
+
+function triggerHaptic(cmd, notConnected = false) {
+  try {
+    if (!('vibrate' in navigator)) return;
+    navigator.vibrate(notConnected || cmd === '3' ? [60, 40, 60] : 15);
+  } catch (e) {}
+}
+
+function triggerErrorFlash(cmd) {
+  stopCutoutRing(cmd);
+  const ring = document.getElementById(`ring-${cmd}`);
+  if (!ring) return;
+  ring.style.background = 'conic-gradient(#ff2a2a 360deg, transparent 0deg)';
+  ring.classList.add('active');
+  ringTimeouts[cmd] = setTimeout(() => stopCutoutRing(cmd), 1000);
+}
+
+function startCutoutRing(cmd) {
+  if (cmd === '1') stopCutoutRing('2');
+  else if (cmd === '2') stopCutoutRing('1');
+  else if (cmd === '3') { stopCutoutRing('1'); stopCutoutRing('2'); }
+  stopCutoutRing(cmd);
+
+  const ring = document.getElementById(`ring-${cmd}`);
+  if (!ring) return;
+
+  const color = RING_COLORS[cmd] || '#f59e0b';
+  const duration = RING_DURATIONS[cmd] || 5000;
+  ring.classList.add('active');
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const angle = (progress * 360).toFixed(1);
+    ring.style.background = `conic-gradient(${color} ${angle}deg, transparent 0deg)`;
+    if (elapsed < duration) {
+      ringAnimations[cmd] = requestAnimationFrame(animate);
+    } else {
+      ring.style.background = `conic-gradient(${color} 360deg, transparent 0deg)`;
+      ringTimeouts[cmd] = setTimeout(() => stopCutoutRing(cmd), 100);
+    }
+  }
+  ringAnimations[cmd] = requestAnimationFrame(animate);
+}
+
+function stopCutoutRing(cmd) {
+  if (ringAnimations[cmd]) {
+    cancelAnimationFrame(ringAnimations[cmd]);
+    delete ringAnimations[cmd];
+  }
+  if (ringTimeouts[cmd]) {
+    clearTimeout(ringTimeouts[cmd]);
+    delete ringTimeouts[cmd];
+  }
+  const ring = document.getElementById(`ring-${cmd}`);
+  if (ring) {
+    ring.classList.remove('active');
+    ring.style.background = 'none';
+  }
+}
+
+function logMessage(msg, type = 'info') {
+  const consoleLog = document.getElementById('consoleLog');
+  if (!consoleLog) return;
+  const time = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = type === 'error' ? 'text-red-500 dark:text-red-400' : (type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300');
+  div.textContent = `[${time}] ${msg}`;
+  consoleLog.appendChild(div);
+  while (consoleLog.children.length > 50) consoleLog.removeChild(consoleLog.firstChild);
+  consoleLog.scrollTop = consoleLog.scrollHeight;
+}
+
+function clearConsole() {
+  const consoleLog = document.getElementById('consoleLog');
+  if (consoleLog) consoleLog.innerHTML = '<div class="text-gray-400 dark:text-gray-500">[System] Console cleared.</div>';
+}
+
+async function toggleConnection() {
+  if (isConnected) {
+    manualDisconnect = true;
+    disconnectBLE();
+  } else {
+    manualDisconnect = false;
+    reconnectAttempts = 0;
+    await connectBLE();
+  }
+}
+
+async function connectBLE(isReconnect = false) {
+  if (isConnecting) return;
+  if (!navigator.bluetooth) {
+    logMessage("Web Bluetooth API not supported on this browser.", "error");
+    alert("Please use Google Chrome on Android.");
+    return;
+  }
+  isConnecting = true;
+  try {
+    if (!isReconnect) {
+      logMessage("Scanning for 'Siddheshwar Niwas'...");
+      bluetoothDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'Siddheshwar Niwas' }],
+        optionalServices: [UART_SERVICE_UUID]
+      });
+      bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    } else {
+      logMessage(`Auto-reconnecting (Attempt ${reconnectAttempts}/3)...`);
+    }
+
+    // 10-second connection timeout protection wrapper
+    const connectPromise = bluetoothDevice.gatt.connect();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Connection timed out (10s)")), 10000)
+    );
+
+    logMessage("Connecting to GATT server...");
+    bluetoothServer = await Promise.race([connectPromise, timeoutPromise]);
+
+    logMessage("Getting Nordic UART Service...");
+    const service = await bluetoothServer.getPrimaryService(UART_SERVICE_UUID);
+
+    logMessage("Accessing characteristics...");
+    rxCharacteristic = await service.getCharacteristic(UART_RX_CHAR_UUID);
+    txCharacteristic = await service.getCharacteristic(UART_TX_CHAR_UUID);
+
+    await txCharacteristic.startNotifications();
+    txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+
+    reconnectAttempts = 0;
+    updateConnectionState(true, bluetoothDevice.name);
+    logMessage(`Connected to ${bluetoothDevice.name}!`, "success");
+  } catch (error) {
+    logMessage(`Connection failed: ${error.message}`, "error");
+    
+    // Auto-reconnect trigger if dropped unexpectedly and under 3 attempts
+    if (!manualDisconnect && reconnectAttempts < 3 && bluetoothDevice) {
+      reconnectAttempts++;
+      setTimeout(() => {
+        isConnecting = false;
+        connectBLE(true);
+      }, 3000); // Wait 3 seconds before trying again
+      return;
+    }
+    disconnectBLE();
+  } finally {
+    if (reconnectAttempts === 0 || manualDisconnect) {
+      isConnecting = false;
+    }
+  }
+}
+
+function sendCommand(cmd) {
+  if (!isConnected || !rxCharacteristic) {
+    triggerHaptic(cmd, true);
+    triggerErrorFlash(cmd);
+    logMessage("Error: Not connected to gate.", "error");
+    return;
+  }
+  triggerHaptic(cmd);
+  startCutoutRing(cmd);
+  writeChain = writeChain.then(async () => {
+    if (!isConnected || !rxCharacteristic) return;
+    try {
+      const value = new TextEncoder().encode(cmd);
+      if (rxCharacteristic.properties.writeWithoutResponse) {
+        await rxCharacteristic.writeValueWithoutResponse(value);
+      } else {
+        await rxCharacteristic.writeValue(value);
+      }
+      logMessage(`Sent Command -> [${cmd}]`, "success");
+    } catch (error) {
+      logMessage(`Failed: ${error.message}`, "error");
+    }
+  });
+}
+
+function handleNotifications(event) {
+  try {
+    const text = new TextDecoder().decode(event.target.value);
+    const cleanText = text ? text.trim() : "";
+    if (cleanText) {
+      logMessage(`ESP32: ${cleanText}`);
+      if (cleanText.toLowerCase().includes('stopped')) {
+        ['1', '2'].forEach(stopCutoutRing);
+      }
+    }
+  } catch (err) {
+    logMessage("ESP32 notification received");
+  }
+}
+
+function onDisconnected() {
+  logMessage("Device disconnected unexpectedly.", "error");
+  if (!manualDisconnect && bluetoothDevice && reconnectAttempts < 3) {
+    reconnectAttempts++;
+    logMessage(`Attempting auto-reconnect (${reconnectAttempts}/3)...`);
+    setTimeout(() => {
+      isConnecting = false;
+      connectBLE(true);
+    }, 2000);
+  } else {
+    disconnectBLE();
+  }
+}
+
+function disconnectBLE() {
+  if (txCharacteristic) {
+    try { txCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications); } catch (e) {}
+  }
+  if (bluetoothDevice) {
+    try {
+      bluetoothDevice.removeEventListener('gattserverdisconnected', onDisconnected);
+      if (bluetoothDevice.gatt && bluetoothDevice.gatt.connected) bluetoothDevice.gatt.disconnect();
+    } catch (e) {}
+  }
+  ['1', '2', '3', '4'].forEach(stopCutoutRing);
+  updateConnectionState(false, "Disconnected");
+  if (manualDisconnect) {
+    logMessage("Disconnected by user.");
+  }
+}
+
+function updateConnectionState(connected, name) {
+  isConnected = connected;
+  isConnecting = false;
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const connectBtn = document.getElementById('connectBtn');
+  const connectBtnText = document.getElementById('connectBtnText');
+
+  if (connected) {
+    statusDot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+    statusText.textContent = name;
+    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
+    connectBtnText.textContent = "Disconnect";
+  } else {
+    statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+    statusText.textContent = "Disconnected";
+    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
+    connectBtnText.textContent = "Connect to Gate";
+    rxCharacteristic = null;
+    txCharacteristic = null;
+    bluetoothServer = null;
+  }
+}
+</script>
+</body>
+</html>
+
