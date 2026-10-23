@@ -1,6 +1,6 @@
 {
   "name": "Pritam's Gate Controller",
-  "short_name": "Gate",
+  "short_name": "Pritam's Gate",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0b0e",
