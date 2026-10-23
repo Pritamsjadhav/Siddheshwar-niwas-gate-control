@@ -133,10 +133,12 @@ body {
 </footer>
 
 <script>
-// Register Service Worker for PWA installation support
+// Register Service Worker and force update check so latest code loads
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg failed:', err));
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => reg.update())
+      .catch(err => console.warn('SW reg failed:', err));
   });
 }
 
@@ -151,32 +153,30 @@ let txCharacteristic = null;
 let isConnected = false;
 let isConnecting = false;
 let manualDisconnect = false;
+let autoReconnectEnabled = false;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
 let writeChain = Promise.resolve();
 
-const MAX_RECONNECT_ATTEMPTS = 3;
 const ringAnimations = {};
 const ringTimeouts = {};
 const RING_COLORS = { '1': '#10b981', '2': '#e11d48', '3': '#ff2a2a', '4': '#f59e0b' };
 const RING_DURATIONS = { '1': 30000, '2': 30000, '3': 1000, '4': 5000 };
 
-// 1. Heartbeat check: guarantees UI never stays stuck on "Connected" if GATT drops silently
+// 1. Heartbeat check: catches silent BLE drops immediately
 setInterval(() => {
   if (isConnected && (!bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected)) {
-    onDisconnected();
+    handleConnectionLost();
   }
 }, 1000);
 
-// 2. Visibility check: syncs UI and triggers auto-reconnect when switching back to the app
+// 2. Visibility check: syncs UI and resumes auto-reconnect when switching back to the app
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     if (isConnected && (!bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected)) {
-      logMessage("App resumed: Connection lost while in background.", "error");
-      onDisconnected();
-    } else if (!isConnected && !isConnecting && !manualDisconnect && bluetoothDevice) {
-      reconnectAttempts = 0;
-      scheduleAutoReconnect(500);
+      handleConnectionLost();
+    } else if (!isConnected && !isConnecting && autoReconnectEnabled && !manualDisconnect && bluetoothDevice) {
+      scheduleAutoReconnect(300);
     }
   }
 });
@@ -274,16 +274,18 @@ function cancelAutoReconnect() {
   }
 }
 
-function scheduleAutoReconnect(delayMs = 2500) {
+function scheduleAutoReconnect(delayMs = 3000) {
   cancelAutoReconnect();
-  if (manualDisconnect || isConnected || !bluetoothDevice || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+  if (manualDisconnect || !autoReconnectEnabled || isConnected || !bluetoothDevice) {
     return;
   }
-  reconnectAttempts++;
-  logMessage(`Auto-reconnect scheduled (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    if (!isConnected && !isConnecting && !manualDisconnect) {
+    if (!isConnected && !isConnecting && !manualDisconnect && autoReconnectEnabled) {
+      if (document.visibilityState === "hidden") {
+        // Wait until app is visible on screen
+        return;
+      }
       connectBLE(true);
     }
   }, delayMs);
@@ -291,15 +293,31 @@ function scheduleAutoReconnect(delayMs = 2500) {
 
 async function toggleConnection() {
   cancelAutoReconnect();
+
   if (isConnected) {
     manualDisconnect = true;
+    autoReconnectEnabled = false;
     reconnectAttempts = 0;
-    disconnectBLE(true);
-  } else {
-    manualDisconnect = false;
-    reconnectAttempts = 0;
-    await connectBLE(false);
+    cleanupAndResetUI();
+    if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
+      try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+    }
+    logMessage("Disconnected by user.");
+    return;
   }
+
+  // If a background auto-reconnect is currently in progress, abort it and run manual connect
+  if (isConnecting) {
+    if (bluetoothDevice && bluetoothDevice.gatt) {
+      try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+    }
+    isConnecting = false;
+  }
+
+  manualDisconnect = false;
+  autoReconnectEnabled = true;
+  reconnectAttempts = 0;
+  await connectBLE(false);
 }
 
 function setConnectingUI(isAuto = false) {
@@ -310,9 +328,9 @@ function setConnectingUI(isAuto = false) {
   const connectBtnText = document.getElementById('connectBtnText');
 
   statusDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
-  statusText.textContent = isAuto ? `Reconnecting (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})` : "Connecting...";
-  
-  // Keep Connect to Gate bar visible during auto-reconnect
+  statusText.textContent = isAuto ? `Reconnecting (#${reconnectAttempts})...` : "Connecting...";
+
+  // Always keep the cyan 'Connect to Gate' bar visible while disconnected/auto-reconnecting
   connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover disabled:opacity-60 disabled:cursor-not-allowed text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
   connectBtnText.textContent = isAuto ? "Connect to Gate" : "Connecting...";
   connectBtn.disabled = !isAuto;
@@ -326,6 +344,10 @@ async function connectBLE(isAutoReconnect = false) {
     return;
   }
 
+  if (isAutoReconnect) {
+    reconnectAttempts++;
+  }
+
   setConnectingUI(isAutoReconnect);
   let timeoutId = null;
 
@@ -336,18 +358,19 @@ async function connectBLE(isAutoReconnect = false) {
         filters: [{ name: 'Siddheshwar Niwas' }],
         optionalServices: [UART_SERVICE_UUID]
       });
-    } else {
-      logMessage(`Attempting auto-reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+    } else if (reconnectAttempts <= 3 || reconnectAttempts % 5 === 0) {
+      logMessage(`Auto-reconnect attempt #${reconnectAttempts}...`);
     }
 
-    // Ensure a single clean disconnect listener is attached
-    bluetoothDevice.removeEventListener('gattserverdisconnected', onDisconnected);
-    bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    // Keep disconnect listener OFF during connection attempt so failed retries don't double-fire
+    bluetoothDevice.removeEventListener('gattserverdisconnected', onGattDisconnected);
 
-    const timeoutMs = isAutoReconnect ? 6000 : 10000;
     const connectPromise = bluetoothDevice.gatt.connect();
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error(`Connection timed out (${timeoutMs / 1000}s)`)), timeoutMs);
+      timeoutId = setTimeout(() => {
+        try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+        reject(new Error("Connection timed out (10s)"));
+      }, 10000);
     });
 
     if (!isAutoReconnect) logMessage("Connecting to GATT server...");
@@ -365,23 +388,36 @@ async function connectBLE(isAutoReconnect = false) {
     txCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications);
     txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
 
+    // Attach disconnect listener ONLY after connection is fully established
+    bluetoothDevice.addEventListener('gattserverdisconnected', onGattDisconnected);
+
+    const wasAuto = isAutoReconnect;
     reconnectAttempts = 0;
+    autoReconnectEnabled = true;
     cancelAutoReconnect();
     updateConnectionState(true, bluetoothDevice.name || "Siddheshwar Niwas");
-    logMessage(`Connected to ${bluetoothDevice.name || "Siddheshwar Niwas"}!`, "success");
+    logMessage(
+      wasAuto
+        ? `Auto-reconnected to ${bluetoothDevice.name || "Siddheshwar Niwas"}!`
+        : `Connected to ${bluetoothDevice.name || "Siddheshwar Niwas"}!`,
+      "success"
+    );
   } catch (error) {
     isConnecting = false;
     updateConnectionState(false, "Disconnected");
 
     if (isAutoReconnect) {
-      logMessage(`Auto-reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}) failed: Device out of range.`, "error");
-      if (!manualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        scheduleAutoReconnect(3000);
-      } else {
-        logMessage("Auto-reconnect paused. Tap 'Connect to Gate' when in range.");
+      if (reconnectAttempts <= 3) {
+        logMessage(`Attempt #${reconnectAttempts} failed (Out of range). Retrying...`, "error");
+      }
+      if (!manualDisconnect && autoReconnectEnabled) {
+        scheduleAutoReconnect(3500);
       }
     } else {
       logMessage(`Connection failed: ${error.message}`, "error");
+      if (!manualDisconnect && bluetoothDevice && autoReconnectEnabled) {
+        scheduleAutoReconnect(3500);
+      }
     }
   } finally {
     isConnecting = false;
@@ -395,7 +431,7 @@ function sendCommand(cmd) {
     triggerHaptic(cmd, true);
     triggerErrorFlash(cmd);
     if (isConnected) {
-      onDisconnected();
+      handleConnectionLost();
     } else {
       logMessage("Error: Not connected to gate.", "error");
     }
@@ -417,35 +453,4 @@ function sendCommand(cmd) {
       }
       logMessage(`Sent Command -> [${cmd}]`, "success");
     } catch (error) {
-      logMessage(`Failed: ${error.message}`, "error");
-      // Immediately drop back to Connect screen if write failed due to lost GATT link
-      if (!bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected || String(error.message).includes("disconnected")) {
-        onDisconnected();
-      }
-    }
-  }).catch(() => {});
-}
-
-function handleNotifications(event) {
-  try {
-    const text = new TextDecoder().decode(event.target.value);
-    const cleanText = text ? text.trim() : "";
-    if (cleanText) {
-      logMessage(`ESP32: ${cleanText}`);
-      if (cleanText.toLowerCase().includes('stopped')) {
-        ['1', '2'].forEach(stopCutoutRing);
-      }
-    }
-  } catch (err) {
-    logMessage("ESP32 notification received");
-  }
-}
-
-function onDisconnected() {
-  if (manualDisconnect) return;
-
-  const wasConnected = isConnected;
-  // 1. Immediately return UI to the Connect to Gate screen
-  disconnectBLE(false);
-
-  i
+      logMessage(`Failed: $
