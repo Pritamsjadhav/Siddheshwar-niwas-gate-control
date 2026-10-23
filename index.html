@@ -128,27 +128,19 @@ body {
     <button type="button" onclick="clearConsole()" class="hover:text-gray-800 dark:hover:text-white transition-colors">Clear</button>
   </div>
   <div id="consoleLog" class="terminal-scroll flex-1 overflow-y-auto font-mono text-[11px] text-gray-700 dark:text-gray-300 space-y-0.5 pr-1">
-    <div class="text-gray-400 dark:text-gray-500">[System] Ready. Tap 'Connect to Gate' to begin.</div>
+    <div class="text-gray-400 dark:text-gray-500">[System] Ready. Tap 'Connect to Gate' (Passkey: 997525)</div>
   </div>
 </footer>
 
 <script>
-// Register Service Worker for PWA installation support
+// Register Service Worker and force update check
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg failed:', err));
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => reg.update())
+      .catch(err => console.warn('SW reg failed:', err));
   });
 }
-
-// Instant UI recovery if connection drops while app is in the background
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    if (bluetoothDevice && bluetoothDevice.gatt && !bluetoothDevice.gatt.connected && isConnected) {
-      logMessage("App resumed: Connection lost while in background.", "error");
-      disconnectBLE();
-    }
-  }
-});
 
 const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 const UART_RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
@@ -161,12 +153,25 @@ let txCharacteristic = null;
 let isConnected = false;
 let isConnecting = false;
 let manualDisconnect = false;
+let autoReconnectEnabled = false;
+let reconnectTimer = null;
 let writeChain = Promise.resolve();
 
 const ringAnimations = {};
 const ringTimeouts = {};
 const RING_COLORS = { '1': '#10b981', '2': '#e11d48', '3': '#ff2a2a', '4': '#f59e0b' };
 const RING_DURATIONS = { '1': 30000, '2': 30000, '3': 1000, '4': 5000 };
+
+// Visibility check: syncs UI and triggers auto-reconnect cleanly when opening or switching back to the app
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    if (isConnected && (!bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected)) {
+      handleConnectionLost();
+    } else if (!isConnected && !isConnecting && autoReconnectEnabled && !manualDisconnect && bluetoothDevice) {
+      scheduleAutoReconnect(300);
+    }
+  }
+});
 
 function triggerHaptic(cmd, notConnected = false) {
   try {
@@ -254,18 +259,54 @@ function clearConsole() {
   consoleLog.appendChild(sysMsg);
 }
 
-async function toggleConnection() {
-  if (isConnecting) return;
-  if (isConnected) {
-    manualDisconnect = true;
-    disconnectBLE();
-  } else {
-    manualDisconnect = false;
-    await connectBLE();
+function cancelAutoReconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
 }
 
-function setConnectingUI() {
+function scheduleAutoReconnect(delayMs = 3000) {
+  cancelAutoReconnect();
+  if (manualDisconnect || !autoReconnectEnabled || isConnected || !bluetoothDevice) {
+    return;
+  }
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!isConnected && !isConnecting && !manualDisconnect && autoReconnectEnabled) {
+      if (document.visibilityState === "hidden") return;
+      connectBLE(true);
+    }
+  }, delayMs);
+}
+
+async function toggleConnection() {
+  cancelAutoReconnect();
+
+  if (isConnected) {
+    manualDisconnect = true;
+    autoReconnectEnabled = false;
+    cleanupAndResetUI();
+    if (bluetoothDevice && bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
+      try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+    }
+    logMessage("Disconnected by user.");
+    return;
+  }
+
+  if (isConnecting) {
+    if (bluetoothDevice && bluetoothDevice.gatt) {
+      try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+    }
+    isConnecting = false;
+  }
+
+  manualDisconnect = false;
+  autoReconnectEnabled = true;
+  await connectBLE(false);
+}
+
+function setConnectingUI(isAuto = false) {
   isConnecting = true;
   const statusDot = document.getElementById('statusDot');
   const statusText = document.getElementById('statusText');
@@ -273,12 +314,14 @@ function setConnectingUI() {
   const connectBtnText = document.getElementById('connectBtnText');
 
   statusDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
-  statusText.textContent = "Connecting...";
-  connectBtn.disabled = true;
-  connectBtnText.textContent = "Connecting...";
+  statusText.textContent = isAuto ? "Reconnecting..." : "Connecting...";
+
+  connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover disabled:opacity-60 disabled:cursor-not-allowed text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
+  connectBtnText.textContent = isAuto ? "Connect to Gate" : "Connecting...";
+  connectBtn.disabled = !isAuto;
 }
 
-async function connectBLE() {
+async function connectBLE(isAutoReconnect = false) {
   if (isConnecting) return;
   if (!navigator.bluetooth) {
     logMessage("Web Bluetooth API not supported on this browser.", "error");
@@ -286,44 +329,72 @@ async function connectBLE() {
     return;
   }
 
-  setConnectingUI();
+  setConnectingUI(isAutoReconnect);
   let timeoutId = null;
 
   try {
-    logMessage("Scanning for 'Siddheshwar Niwas'...");
-    bluetoothDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ name: 'Siddheshwar Niwas' }],
-      optionalServices: [UART_SERVICE_UUID]
-    });
-    bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    if (!isAutoReconnect || !bluetoothDevice) {
+      logMessage("Scanning for 'Siddheshwar Niwas'...");
+      bluetoothDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'Siddheshwar Niwas' }],
+        optionalServices: [UART_SERVICE_UUID]
+      });
+    } else {
+      logMessage("Attempting auto-reconnect...");
+    }
+
+    bluetoothDevice.removeEventListener('gattserverdisconnected', onGattDisconnected);
 
     const connectPromise = bluetoothDevice.gatt.connect();
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error("Connection timed out (10s)")), 10000);
+      timeoutId = setTimeout(() => {
+        try { bluetoothDevice.gatt.disconnect(); } catch (e) {}
+        reject(new Error("Connection timed out (10s)"));
+      }, 10000);
     });
 
-    logMessage("Connecting to GATT server...");
+    if (!isAutoReconnect) logMessage("Connecting to GATT server...");
     try {
       bluetoothServer = await Promise.race([connectPromise, timeoutPromise]);
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
     }
 
-    logMessage("Getting Nordic UART Service...");
     const service = await bluetoothServer.getPrimaryService(UART_SERVICE_UUID);
-
-    logMessage("Accessing characteristics...");
     rxCharacteristic = await service.getCharacteristic(UART_RX_CHAR_UUID);
     txCharacteristic = await service.getCharacteristic(UART_TX_CHAR_UUID);
 
     await txCharacteristic.startNotifications();
+    txCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications);
     txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
 
-    updateConnectionState(true, bluetoothDevice.name || "Connected");
-    logMessage(`Connected to ${bluetoothDevice.name || "Gate"}!`, "success");
+    bluetoothDevice.addEventListener('gattserverdisconnected', onGattDisconnected);
+
+    const wasAuto = isAutoReconnect;
+    autoReconnectEnabled = true;
+    cancelAutoReconnect();
+    updateConnectionState(true, bluetoothDevice.name || "Siddheshwar Niwas");
+    logMessage(
+      wasAuto
+        ? `Auto-reconnected to ${bluetoothDevice.name || "Siddheshwar Niwas"}!`
+        : `Connected to ${bluetoothDevice.name || "Siddheshwar Niwas"}!`,
+      "success"
+    );
   } catch (error) {
-    logMessage(`Connection failed: ${error.message}`, "error");
-    disconnectBLE();
+    isConnecting = false;
+    updateConnectionState(false, "Disconnected");
+
+    if (isAutoReconnect) {
+      logMessage("Auto-reconnect failed (Out of range). Retrying...", "error");
+      if (!manualDisconnect && autoReconnectEnabled) {
+        scheduleAutoReconnect(3500);
+      }
+    } else {
+      logMessage(`Connection failed: ${error.message}`, "error");
+      if (!manualDisconnect && bluetoothDevice && autoReconnectEnabled) {
+        scheduleAutoReconnect(3500);
+      }
+    }
   } finally {
     isConnecting = false;
     const connectBtn = document.getElementById('connectBtn');
@@ -332,12 +403,17 @@ async function connectBLE() {
 }
 
 function sendCommand(cmd) {
-  if (!isConnected || !rxCharacteristic) {
+  if (!isConnected || !rxCharacteristic || !bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected) {
     triggerHaptic(cmd, true);
     triggerErrorFlash(cmd);
-    logMessage("Error: Not connected to gate.", "error");
+    if (isConnected) {
+      handleConnectionLost();
+    } else {
+      logMessage("Error: Not connected to gate.", "error");
+    }
     return;
   }
+
   triggerHaptic(cmd);
   startCutoutRing(cmd);
   writeChain = writeChain.then(async () => {
@@ -354,6 +430,9 @@ function sendCommand(cmd) {
       logMessage(`Sent Command -> [${cmd}]`, "success");
     } catch (error) {
       logMessage(`Failed: ${error.message}`, "error");
+      if (!bluetoothDevice || !bluetoothDevice.gatt || !bluetoothDevice.gatt.connected || String(error.message).includes("disconnected")) {
+        handleConnectionLost();
+      }
     }
   }).catch(() => {});
 }
@@ -373,56 +452,15 @@ function handleNotifications(event) {
   }
 }
 
-function onDisconnected() {
-  logMessage("Device disconnected (Out of range or link lost).", "error");
-  disconnectBLE();
+function onGattDisconnected() {
+  if (!isConnected || isConnecting || manualDisconnect) return;
+  handleConnectionLost();
 }
 
-function disconnectBLE() {
-  if (txCharacteristic) {
-    try { txCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications); } catch (e) {}
-  }
-  if (bluetoothDevice) {
-    try {
-      bluetoothDevice.removeEventListener('gattserverdisconnected', onDisconnected);
-      if (bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
-        bluetoothDevice.gatt.disconnect();
-      }
-    } catch (e) {}
-  }
-  ['1', '2', '3', '4'].forEach(stopCutoutRing);
-  updateConnectionState(false, "Disconnected");
-  if (manualDisconnect) {
-    logMessage("Disconnected by user.");
-  }
-  manualDisconnect = false;
-}
+function handleConnectionLost() {
+  if (!isConnected && !rxCharacteristic) return;
 
-function updateConnectionState(connected, name) {
-  isConnected = connected;
-  isConnecting = false;
-  const statusDot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const connectBtn = document.getElementById('connectBtn');
-  const connectBtnText = document.getElementById('connectBtnText');
+  cleanupAndResetUI();
+  logMessage("Device disconnected (Out of range). Returned to Connect screen.", "error");
 
-  connectBtn.disabled = false;
-
-  if (connected) {
-    statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
-    statusText.textContent = name;
-    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
-    connectBtnText.textContent = "Disconnect";
-  } else {
-    statusDot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
-    statusText.textContent = "Disconnected";
-    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover disabled:opacity-60 disabled:cursor-not-allowed text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
-    connectBtnText.textContent = "Connect to Gate";
-    rxCharacteristic = null;
-    txCharacteristic = null;
-    bluetoothServer = null;
-  }
-}
-</script>
-</body>
-</html>
+  if (!manualD
