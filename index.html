@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0b0e">
 <title>Pritam's Gate Controller</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -37,11 +38,13 @@ tailwind.config = {
 body {
   font-family: 'Inter', sans-serif;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 .terminal-scroll::-webkit-scrollbar { width: 5px; }
 .terminal-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
 .terminal-scroll::-webkit-scrollbar-thumb { background: rgba(150, 150, 150, 0.3); border-radius: 3px; }
-.tactile-btn:active { transform: scale(0.97); }
+.tactile-btn:active:not(:disabled) { transform: scale(0.97); }
 .cutout-ring {
   position: absolute;
   inset: -1px;
@@ -76,28 +79,28 @@ body {
     </div>
   </div>
 
-  <button id="connectBtn" onclick="toggleConnection()" class="w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm">
+  <button type="button" id="connectBtn" onclick="toggleConnection()" class="w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover disabled:opacity-60 disabled:cursor-not-allowed text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
     <span id="connectBtnText">Connect to Gate</span>
   </button>
 </header>
 
 <main class="grid grid-cols-2 gap-3">
-  <button onclick="sendCommand('1')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+  <button type="button" onclick="sendCommand('1')" aria-label="Open Gate" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
     <div id="ring-1" class="cutout-ring"></div>
     <div class="w-11 h-11 rounded-[16px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-xl">🔓</div>
     <span class="text-sm font-bold tracking-wider">OPEN</span>
     <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 1</span>
   </button>
 
-  <button onclick="sendCommand('2')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-rose-500/50 dark:hover:border-rose-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+  <button type="button" onclick="sendCommand('2')" aria-label="Close Gate" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-rose-500/50 dark:hover:border-rose-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
     <div id="ring-2" class="cutout-ring"></div>
     <div class="w-11 h-11 rounded-[16px] bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform text-xl">🔒</div>
     <span class="text-sm font-bold tracking-wider">CLOSE</span>
     <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 2</span>
   </button>
 
-  <button onclick="sendCommand('3')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-red-500/50 dark:hover:border-red-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+  <button type="button" onclick="sendCommand('3')" aria-label="Stop Gate" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-red-500/50 dark:hover:border-red-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
     <div id="ring-3" class="cutout-ring"></div>
     <div class="w-11 h-11 rounded-[16px] bg-red-500/15 text-red-600 dark:text-red-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -106,7 +109,7 @@ body {
     <span class="text-[9px] text-gray-500 dark:text-gray-400">Command 3</span>
   </button>
 
-  <button onclick="sendCommand('4')" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-amber-500/50 dark:hover:border-amber-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
+  <button type="button" onclick="sendCommand('4')" aria-label="Toggle Lamps" class="relative tactile-btn flex flex-col items-center justify-center p-3 rounded-[28px] bg-white dark:bg-industrial-900 border border-gray-300 dark:border-industrial-700 hover:border-amber-500/50 dark:hover:border-amber-500/50 hover:bg-gray-500/5 dark:hover:bg-industrial-800 transition-all group shadow-sm" style="aspect-ratio: 1 / 0.85;">
     <div id="ring-4" class="cutout-ring"></div>
     <div class="w-11 h-11 rounded-[16px] bg-amber-500/10 text-amber-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
@@ -122,18 +125,18 @@ body {
       <span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>
       CONSOLE FEEDBACK
     </span>
-    <button onclick="clearConsole()" class="hover:text-gray-800 dark:hover:text-white transition-colors">Clear</button>
+    <button type="button" onclick="clearConsole()" class="hover:text-gray-800 dark:hover:text-white transition-colors">Clear</button>
   </div>
   <div id="consoleLog" class="terminal-scroll flex-1 overflow-y-auto font-mono text-[11px] text-gray-700 dark:text-gray-300 space-y-0.5 pr-1">
-    <div class="text-gray-400 dark:text-gray-500">[System] Ready. Tap 'Connect to Gate' (Passkey: 997525)</div>
+    <div class="text-gray-400 dark:text-gray-500">[System] Ready. Tap 'Connect to Gate' to begin.</div>
   </div>
 </footer>
 
 <script>
-// Register Service Worker for PWA installation support[span_2](start_span)[span_2](end_span)
+// Register Service Worker for PWA installation support
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW reg failed:', err));
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg failed:', err));
   });
 }
 
@@ -148,7 +151,6 @@ let txCharacteristic = null;
 let isConnected = false;
 let isConnecting = false;
 let manualDisconnect = false;
-let reconnectAttempts = 0;
 let writeChain = Promise.resolve();
 
 const ringAnimations = {};
@@ -213,7 +215,6 @@ function stopCutoutRing(cmd) {
   const ring = document.getElementById(`ring-${cmd}`);
   if (ring) {
     ring.classList.remove('active');
-    ring.style.background = 'none';
   }
 }
 
@@ -222,56 +223,81 @@ function logMessage(msg, type = 'info') {
   if (!consoleLog) return;
   const time = new Date().toLocaleTimeString();
   const div = document.createElement('div');
-  div.className = type === 'error' ? 'text-red-500 dark:text-red-400' : (type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300');
+  div.className = type === 'error'
+    ? 'text-red-500 dark:text-red-400'
+    : (type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300');
   div.textContent = `[${time}] ${msg}`;
   consoleLog.appendChild(div);
-  while (consoleLog.children.length > 50) consoleLog.removeChild(consoleLog.firstChild);
+  while (consoleLog.children.length > 50) {
+    consoleLog.removeChild(consoleLog.firstChild);
+  }
   consoleLog.scrollTop = consoleLog.scrollHeight;
 }
 
 function clearConsole() {
   const consoleLog = document.getElementById('consoleLog');
-  if (consoleLog) consoleLog.innerHTML = '<div class="text-gray-400 dark:text-gray-500">[System] Console cleared.</div>';
+  if (!consoleLog) return;
+  consoleLog.replaceChildren();
+  const sysMsg = document.createElement('div');
+  sysMsg.className = 'text-gray-400 dark:text-gray-500';
+  sysMsg.textContent = '[System] Console cleared.';
+  consoleLog.appendChild(sysMsg);
 }
 
 async function toggleConnection() {
+  if (isConnecting) return;
   if (isConnected) {
     manualDisconnect = true;
     disconnectBLE();
   } else {
     manualDisconnect = false;
-    reconnectAttempts = 0;
     await connectBLE();
   }
 }
 
-async function connectBLE(isReconnect = false) {
+function setConnectingUI() {
+  isConnecting = true;
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const connectBtn = document.getElementById('connectBtn');
+  const connectBtnText = document.getElementById('connectBtnText');
+
+  statusDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+  statusText.textContent = "Connecting...";
+  connectBtn.disabled = true;
+  connectBtnText.textContent = "Connecting...";
+}
+
+async function connectBLE() {
   if (isConnecting) return;
   if (!navigator.bluetooth) {
     logMessage("Web Bluetooth API not supported on this browser.", "error");
-    alert("Please use Google Chrome on Android.");
+    alert("Please use Google Chrome on Android or a compatible Web Bluetooth browser.");
     return;
   }
-  isConnecting = true;
+
+  setConnectingUI();
+  let timeoutId = null;
+
   try {
-    if (!isReconnect) {
-      logMessage("Scanning for 'Siddheshwar Niwas'...");
-      bluetoothDevice = await navigator.bluetooth.requestDevice({
-        filters: [{ name: 'Siddheshwar Niwas' }],
-        optionalServices: [UART_SERVICE_UUID]
-      });
-      bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
-    } else {
-      logMessage(`Auto-reconnecting (Attempt ${reconnectAttempts}/3)...`);
-    }
+    logMessage("Scanning for 'Siddheshwar Niwas'...");
+    bluetoothDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'Siddheshwar Niwas' }],
+      optionalServices: [UART_SERVICE_UUID]
+    });
+    bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
     const connectPromise = bluetoothDevice.gatt.connect();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Connection timed out (10s)")), 10000)
-    );
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error("Connection timed out (10s)")), 10000);
+    });
 
     logMessage("Connecting to GATT server...");
-    bluetoothServer = await Promise.race([connectPromise, timeoutPromise]);
+    try {
+      bluetoothServer = await Promise.race([connectPromise, timeoutPromise]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
 
     logMessage("Getting Nordic UART Service...");
     const service = await bluetoothServer.getPrimaryService(UART_SERVICE_UUID);
@@ -283,25 +309,15 @@ async function connectBLE(isReconnect = false) {
     await txCharacteristic.startNotifications();
     txCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
 
-    reconnectAttempts = 0;
-    updateConnectionState(true, bluetoothDevice.name);
-    logMessage(`Connected to ${bluetoothDevice.name}!`, "success");
+    updateConnectionState(true, bluetoothDevice.name || "Connected");
+    logMessage(`Connected to ${bluetoothDevice.name || "Gate"}!`, "success");
   } catch (error) {
     logMessage(`Connection failed: ${error.message}`, "error");
-    
-    if (!manualDisconnect && reconnectAttempts < 3 && bluetoothDevice) {
-      reconnectAttempts++;
-      setTimeout(() => {
-        isConnecting = false;
-        connectBLE(true);
-      }, 3000);
-      return;
-    }
     disconnectBLE();
   } finally {
-    if (reconnectAttempts === 0 || manualDisconnect) {
-      isConnecting = false;
-    }
+    isConnecting = false;
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn) connectBtn.disabled = false;
   }
 }
 
@@ -318,8 +334,10 @@ function sendCommand(cmd) {
     if (!isConnected || !rxCharacteristic) return;
     try {
       const value = new TextEncoder().encode(cmd);
-      if (rxCharacteristic.properties.writeWithoutResponse) {
+      if (rxCharacteristic.properties.writeWithoutResponse && rxCharacteristic.writeValueWithoutResponse) {
         await rxCharacteristic.writeValueWithoutResponse(value);
+      } else if (rxCharacteristic.writeValueWithResponse) {
+        await rxCharacteristic.writeValueWithResponse(value);
       } else {
         await rxCharacteristic.writeValue(value);
       }
@@ -327,7 +345,7 @@ function sendCommand(cmd) {
     } catch (error) {
       logMessage(`Failed: ${error.message}`, "error");
     }
-  });
+  }).catch(() => {});
 }
 
 function handleNotifications(event) {
@@ -346,17 +364,8 @@ function handleNotifications(event) {
 }
 
 function onDisconnected() {
-  logMessage("Device disconnected unexpectedly (Out of range or link lost).", "error");
-  if (!manualDisconnect && bluetoothDevice && reconnectAttempts < 3) {
-    reconnectAttempts++;
-    logMessage(`Attempting auto-reconnect (${reconnectAttempts}/3)...`);
-    setTimeout(() => {
-      isConnecting = false;
-      connectBLE(true);
-    }, 2000);
-  } else {
-    disconnectBLE();
-  }
+  logMessage("Device disconnected (Out of range or link lost).", "error");
+  disconnectBLE();
 }
 
 function disconnectBLE() {
@@ -366,7 +375,9 @@ function disconnectBLE() {
   if (bluetoothDevice) {
     try {
       bluetoothDevice.removeEventListener('gattserverdisconnected', onDisconnected);
-      if (bluetoothDevice.gatt && bluetoothDevice.gatt.connected) bluetoothDevice.gatt.disconnect();
+      if (bluetoothDevice.gatt && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
     } catch (e) {}
   }
   ['1', '2', '3', '4'].forEach(stopCutoutRing);
@@ -374,6 +385,7 @@ function disconnectBLE() {
   if (manualDisconnect) {
     logMessage("Disconnected by user.");
   }
+  manualDisconnect = false;
 }
 
 function updateConnectionState(connected, name) {
@@ -384,15 +396,17 @@ function updateConnectionState(connected, name) {
   const connectBtn = document.getElementById('connectBtn');
   const connectBtnText = document.getElementById('connectBtnText');
 
+  connectBtn.disabled = false;
+
   if (connected) {
-    statusDot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+    statusDot.className = "w-2 h-2 rounded-full bg-emerald-500";
     statusText.textContent = name;
-    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
+    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
     connectBtnText.textContent = "Disconnect";
   } else {
-    statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+    statusDot.className = "w-2 h-2 rounded-full bg-red-500 animate-pulse";
     statusText.textContent = "Disconnected";
-    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
+    connectBtn.className = "w-full py-3 px-4 rounded-[20px] font-semibold bg-industrial-accent hover:bg-industrial-accentHover disabled:opacity-60 disabled:cursor-not-allowed text-industrial-950 shadow-md shadow-cyan-500/10 transition-all flex items-center justify-center gap-2 tactile-btn text-sm";
     connectBtnText.textContent = "Connect to Gate";
     rxCharacteristic = null;
     txCharacteristic = null;
